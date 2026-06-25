@@ -27,6 +27,8 @@ export const env = {
   feishuBabyTableId: optional("FEISHU_BABY_TABLE_ID"),
   feishuWeeklyTableId: optional("FEISHU_WEEKLY_TABLE_ID"),
   feishuTargetFolderToken: optional("FEISHU_TARGET_FOLDER_TOKEN"),
+  feishuTransferOwnerEmail: optional("FEISHU_TRANSFER_OWNER_EMAIL"),
+  feishuTransferOwnerMobile: optional("FEISHU_TRANSFER_OWNER_MOBILE"),
   openaiApiKey: optional("OPENAI_API_KEY"),
   openaiModel: optional("OPENAI_MODEL", "gpt-4.1"),
   llmProvider: optional("LLM_PROVIDER", "openai"),

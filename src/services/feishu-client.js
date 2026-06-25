@@ -142,7 +142,7 @@ export class FeishuClient {
     );
   }
 
-  async uploadFile(filePath) {
+  async uploadFile(filePath, folderToken = env.feishuTargetFolderToken) {
     const token = await this.getTenantAccessToken();
     const fileBuffer = await fs.readFile(filePath);
     const stats = await fs.stat(filePath);
@@ -150,7 +150,7 @@ export class FeishuClient {
 
     formData.append("file_name", path.basename(filePath));
     formData.append("parent_type", "explorer");
-    formData.append("parent_node", env.feishuTargetFolderToken);
+    formData.append("parent_node", folderToken);
     formData.append("size", String(stats.size));
     formData.append("file", new Blob([fileBuffer]), path.basename(filePath));
 
@@ -170,7 +170,7 @@ export class FeishuClient {
     return data.data;
   }
 
-  async importExcelAsSheet(fileToken, fileName) {
+  async importExcelAsSheet(fileToken, fileName, folderToken = env.feishuTargetFolderToken) {
     const payload = {
       file_extension: "xlsx",
       file_token: fileToken,
@@ -178,7 +178,7 @@ export class FeishuClient {
       file_name: fileName,
       point: {
         mount_type: 1,
-        mount_key: env.feishuTargetFolderToken
+        mount_key: folderToken
       }
     };
 
@@ -190,6 +190,54 @@ export class FeishuClient {
     );
 
     return this.pollImportResult(created.data.ticket);
+  }
+
+  async getUserIdByEmailOrMobile({ email = "", mobile = "" }) {
+    const payload = {};
+    if (email) payload.emails = [email];
+    if (mobile) payload.mobiles = [mobile];
+    if (!payload.emails && !payload.mobiles) return "";
+
+    const response = await this.request(
+      "POST",
+      "https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id?user_id_type=open_id",
+      JSON.stringify(payload),
+      {
+        "Content-Type": "application/json"
+      }
+    );
+
+    const userList = response.data?.user_list || [];
+    const directUser = userList.find((item) => (email && item.email === email) || (mobile && item.mobile === mobile));
+    if (directUser?.user_id) return directUser.user_id;
+
+    const emailUsers = response.data?.email_users || {};
+    const mobileUsers = response.data?.mobile_users || {};
+    const emailUser = email ? emailUsers[email]?.[0] : null;
+    const mobileUser = mobile ? mobileUsers[mobile]?.[0] : null;
+    return emailUser?.user_id || mobileUser?.user_id || "";
+  }
+
+  async transferSheetOwner(sheetToken, userId) {
+    if (!sheetToken || !userId) return;
+
+    return this.request(
+      "POST",
+      "https://open.feishu.cn/open-apis/drive/permission/member/transfer",
+      JSON.stringify({
+        token: sheetToken,
+        type: "sheet",
+        owner: {
+          member_type: "openid",
+          member_id: userId
+        },
+        need_notification: false,
+        remove_old_owner: false
+      }),
+      {
+        "Content-Type": "application/json"
+      }
+    );
   }
 
   async pollImportResult(ticket) {
@@ -229,6 +277,61 @@ export class FeishuClient {
   getBabyTableId() {
     const config = requireFeishuEnv();
     return config.babyTableId || requiredTableId("FEISHU_BABY_TABLE_ID");
+  }
+
+  async ensureChildFolder(parentFolderToken, folderName) {
+    const normalizedName = sanitizeFolderName(folderName);
+    if (!normalizedName) return parentFolderToken;
+
+    const existing = await this.findChildFolder(parentFolderToken, normalizedName);
+    if (existing) return existing;
+
+    const created = await this.request(
+      "POST",
+      "https://open.feishu.cn/open-apis/drive/v1/files/create_folder",
+      JSON.stringify({
+        name: normalizedName,
+        folder_token: parentFolderToken
+      }),
+      {
+        "Content-Type": "application/json"
+      }
+    );
+
+    return created.data?.token || created.data?.folder?.token || created.data?.folder_token || parentFolderToken;
+  }
+
+  async findChildFolder(parentFolderToken, folderName) {
+    const encodedParent = encodeURIComponent(parentFolderToken);
+    const encodedName = encodeURIComponent(folderName);
+    const response = await this.request(
+      "GET",
+      `https://open.feishu.cn/open-apis/drive/v1/files?folder_token=${encodedParent}&page_size=200`
+    );
+
+    const files = response.data?.files || response.data?.items || [];
+    const folder = files.find((item) => {
+      const name = item.name || item.title;
+      const type = item.type || item.mime_type || item.file_type;
+      return name === folderName && String(type || "").toLowerCase().includes("folder");
+    });
+
+    if (folder) {
+      return folder.token || folder.file_token || folder.obj_token || "";
+    }
+
+    const fallback = await this.request(
+      "GET",
+      `https://open.feishu.cn/open-apis/drive/explorer/v2/folder/${encodedParent}/children?page_size=200`
+    );
+    const children = fallback.data?.items || fallback.data?.entities || [];
+    const childFolder = children.find((item) => {
+      const name = item.name || item.title;
+      const type = item.type || item.obj_type;
+      return name === folderName && String(type || "").toLowerCase().includes("folder");
+    });
+
+    return childFolder?.token || childFolder?.obj_token || childFolder?.file_token || "";
   }
 }
 
@@ -270,6 +373,18 @@ function extractRelationRecordId(value) {
     }
   }
   return "";
+}
+
+export function extractSheetTokenFromUrl(url) {
+  const match = String(url || "").match(/\/sheets\/([A-Za-z0-9]+)/);
+  return match?.[1] || "";
+}
+
+function sanitizeFolderName(value) {
+  return String(value || "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function parseJsonResponse(response, debugFileName) {

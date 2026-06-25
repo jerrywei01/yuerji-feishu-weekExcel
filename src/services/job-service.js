@@ -1,8 +1,9 @@
 import { AIGenerator } from "./ai-generator.js";
-import { FeishuClient } from "./feishu-client.js";
+import { FeishuClient, extractSheetTokenFromUrl } from "./feishu-client.js";
 import { SheetRenderer } from "./sheet-renderer.js";
 import { logger } from "../utils/logger.js";
 import { buildDisplayTitle, buildFileBaseName } from "../utils/plan-title.js";
+import { env } from "../utils/env.js";
 import { validateRecordInput } from "../utils/validators.js";
 
 const FEISHU_FIELDS = {
@@ -58,14 +59,20 @@ export class JobService {
         fileBaseName,
         planTitle: displayTitle
       };
+      const targetFolderToken = await this.feishuClient.ensureChildFolder(
+        process.env.FEISHU_TARGET_FOLDER_TOKEN,
+        record.motherName
+      );
 
       const aiResult = await this.aiGenerator.generate(resolvedRecord);
       const localFilePath = await this.sheetRenderer.render(resolvedRecord, aiResult);
-      const uploaded = await this.feishuClient.uploadFile(localFilePath);
+      const uploaded = await this.feishuClient.uploadFile(localFilePath, targetFolderToken);
       const imported = await this.feishuClient.importExcelAsSheet(
         uploaded.file_token || uploaded.file_token_list?.[0] || uploaded.token,
-        fileBaseName
+        fileBaseName,
+        targetFolderToken
       );
+      await this.transferGeneratedSheetOwner(imported);
 
       await this.feishuClient.updateWeeklyRecord(recordId, {
         [FEISHU_FIELDS.status]: FEISHU_STATUS.done,
@@ -97,5 +104,23 @@ export class JobService {
 
       throw error;
     }
+  }
+
+  async transferGeneratedSheetOwner(imported) {
+    const email = env.feishuTransferOwnerEmail;
+    const mobile = env.feishuTransferOwnerMobile;
+    if (!email && !mobile) return;
+
+    const userId = await this.feishuClient.getUserIdByEmailOrMobile({ email, mobile });
+    if (!userId) {
+      throw new Error("未找到要转让的飞书用户，请检查 FEISHU_TRANSFER_OWNER_EMAIL 或 FEISHU_TRANSFER_OWNER_MOBILE");
+    }
+
+    const sheetToken = imported.token || extractSheetTokenFromUrl(imported.url);
+    if (!sheetToken) {
+      throw new Error("未能识别生成表格的 sheet token，无法转让所有权");
+    }
+
+    await this.feishuClient.transferSheetOwner(sheetToken, userId);
   }
 }
