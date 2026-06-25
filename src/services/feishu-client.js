@@ -192,6 +192,16 @@ export class FeishuClient {
     return this.pollImportResult(created.data.ticket);
   }
 
+  async deleteFile(fileToken) {
+    if (!fileToken) return;
+
+    const encodedToken = encodeURIComponent(fileToken);
+    return this.request(
+      "DELETE",
+      `https://open.feishu.cn/open-apis/drive/v1/files/${encodedToken}`
+    );
+  }
+
   async getUserIdByEmailOrMobile({ email = "", mobile = "" }) {
     const payload = {};
     if (email) payload.emails = [email];

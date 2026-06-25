@@ -302,78 +302,7 @@ function findSection(checklist, category) {
 }
 
 function buildFoodSummaryText(foodReference) {
-  const morning = summarizeMorning(foodReference.rows[0] || []);
-  const noon = summarizeNoon(foodReference.rows[1] || []);
-  const evening = summarizeEvening(foodReference.rows[2] || []);
-  return [`上午：${morning}`, `中午：${noon}`, `晚上：${evening}`].join("\n");
-}
-
-function summarizeMorning(values) {
-  const items = cleanValues(values);
-  const grouped = groupMealExamples(items);
-  return grouped.find((item) => item.startsWith("粥（例：")) || grouped.find((item) => item.startsWith("面（例：")) || grouped[0] || "粥/面";
-}
-
-function summarizeNoon(values) {
-  const items = groupMealExamples(cleanValues(values));
-  return items.slice(0, 4).join(" / ") || "面/粥/土豆泥/蔬菜泥";
-}
-
-function summarizeEvening(values) {
-  const items = groupMealExamples(cleanValues(values));
-  const hasChew = items.some((item) => item.includes("啃咬"));
-  const base = items.find((item) => item.startsWith("面（例：")) || items.find((item) => item.includes("粥/面")) || "面（例：面条）";
-  return hasChew ? `${stripChew(base)}+啃咬` : base;
-}
-
-function cleanValues(values) {
-  return [...new Set(values.map((item) => normalizeFoodValue(item)).filter(Boolean))];
-}
-
-function normalizeFoodValue(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  if (/^面（例：面\)$/.test(text)) return "面（例：面条）";
-  if (/^粥（例：粥\)$/.test(text)) return "粥（例：小米粥）";
-  return text.replace(/\s+/g, " ");
-}
-
-function stripChew(value) {
-  return String(value || "").replace(/\s*\/\s*啃咬/g, "").replace(/\s*啃咬/g, "").trim();
-}
-
-function groupMealExamples(items) {
-  const grouped = new Map();
-  const ordered = [];
-
-  for (const item of items) {
-    const match = item.match(/^([粥面])（例：(.+)）$/);
-    if (!match) {
-      if (!ordered.includes(item)) ordered.push(item);
-      continue;
-    }
-
-    const key = match[1];
-    const values = match[2]
-      .split("/")
-      .map((part) => part.trim())
-      .filter(Boolean);
-
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
-      ordered.push(key);
-    }
-
-    const bucket = grouped.get(key);
-    for (const value of values) {
-      if (!bucket.includes(value)) bucket.push(value);
-    }
-  }
-
-  return ordered.map((entry) => {
-    if (!grouped.has(entry)) return entry;
-    return `${entry}（例：${grouped.get(entry).join("/")}）`;
-  });
+  return String(foodReference?.summaryText || "").trim();
 }
 
 function paintCellsFromTemplate(sheet, templateStyles, sourceRow, targetRow, columns) {

@@ -72,6 +72,7 @@ export class JobService {
         fileBaseName,
         targetFolderToken
       );
+      await this.feishuClient.deleteFile(uploaded.file_token || uploaded.file_token_list?.[0] || uploaded.token);
       await this.transferGeneratedSheetOwner(imported);
 
       await this.feishuClient.updateWeeklyRecord(recordId, {

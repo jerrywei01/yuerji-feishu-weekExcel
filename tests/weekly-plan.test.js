@@ -142,9 +142,10 @@ test("layout helpers keep note guidance, dedupe outdoor tasks, and summarize foo
   assert.match(detailedRoutineLines, /20:00 喂奶150-210ml左右/);
   assert.ok(!/比如今晚/.test(detailedRoutineLines));
   assert.match(focusText, /关注肠道调理和大便变化/);
-  assert.equal(foodReference.rows[0][0], "粥（例：小米粥） / 面（例：猪肉青菜面）");
-  assert.equal(foodReference.rows[1][0], "面（例：碎肉青菜面条） / 粥（例：红薯红枣粥） / 土豆泥/蔬菜泥 / 面（例：西兰花碎肉面）");
-  assert.equal(foodReference.rows[2][0], "啃咬");
+  assert.equal(
+    foodReference.summaryText,
+    "第1天：上午：粥/面（例：小米粥/猪肉青菜面）；中午：面（例：碎肉青菜面条）/粥（例：红薯红枣粥）/土豆泥/蔬菜泥/面（例：西兰花碎肉面）；晚上：面（例：面)+啃咬"
+  );
 });
 
 test("SheetRenderer preserves colored merged sections, photo upload rows, guided note label, and merged food summary", async () => {
@@ -230,9 +231,10 @@ test("SheetRenderer preserves colored merged sections, photo upload rows, guided
   assert.ok((sheet.getRow(12).height || 0) < 30);
   assert.ok((sheet.getRow(stoolRow).height || 0) >= 40);
   assert.equal(sheet.getCell(`A${foodHeaderRow}`).value, "辅食（参考）");
-  assert.match(String(sheet.getCell(`A${foodHeaderRow + 1}`).value || ""), /上午：粥（例：小米粥）/);
-  assert.match(String(sheet.getCell(`A${foodHeaderRow + 1}`).value || ""), /中午：面（例：碎肉青菜面条）/);
-  assert.match(String(sheet.getCell(`A${foodHeaderRow + 1}`).value || ""), /晚上：面（例：面条）\+啃咬/);
+  assert.equal(
+    String(sheet.getCell(`A${foodHeaderRow + 1}`).value || ""),
+    "第1天：上午：粥（例：小米粥）；中午：面（例：碎肉青菜面条）/粥（例：红薯红枣粥）/土豆泥/蔬菜泥/面（例：西兰花碎肉面）；晚上：面（例：面)+啃咬"
+  );
 });
 
 function findRow(sheet, predicate) {

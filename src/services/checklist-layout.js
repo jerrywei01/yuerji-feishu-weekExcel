@@ -25,18 +25,9 @@ export function buildDynamicChecklistSections(week, input, babyCard) {
 }
 
 export function buildFoodReference(feedingPlan = "", weekCount = 7) {
-  const days = parseDailyMeals(feedingPlan);
-  const fallback = deriveGenericMealRows(feedingPlan);
-  const weekdays = WEEKDAY_LABELS.slice(0, Math.max(1, Math.min(weekCount, 7)));
-  const rows = ["morning", "noon", "evening"].map((mealKey) =>
-    weekdays.map((_, index) => days[index]?.[mealKey] || fallback[mealKey] || "")
-  );
-
   return {
     header: "辅食（参考）",
-    weekdays,
-    rowLabels: ["上午", "中午", "晚上"],
-    rows
+    summaryText: String(feedingPlan || "").trim()
   };
 }
 
@@ -196,101 +187,6 @@ function extractCareHints(input) {
   if (/山茶油/.test(text)) hints.push("薄涂山茶油保湿");
 
   return hints;
-}
-
-function deriveGenericMealRows(feedingPlan) {
-  const text = String(feedingPlan || "");
-
-  return {
-    morning: generalizeMeal(findMatchingSentence(text, /(早餐|上午|10点|7点)/)),
-    noon: generalizeMeal(findMatchingSentence(text, /(中午|午餐|12点|15点|下午)/)),
-    evening: generalizeMeal(findMatchingSentence(text, /(晚上|晚餐|18点|20点)/))
-  };
-}
-
-function findMatchingSentence(text, pattern) {
-  return String(text || "")
-    .split(/[\n。；;]/)
-    .map((item) => item.trim())
-    .find((item) => pattern.test(item)) || "";
-}
-
-function parseDailyMeals(text) {
-  const source = String(text || "");
-  const matches = [...source.matchAll(/第\s*(\d+)\s*天[:：]?([\s\S]*?)(?=第\s*\d+\s*天[:：]?|$)/g)];
-  return matches.map((match) => classifyMealBlock(match[2]));
-}
-
-function classifyMealBlock(block) {
-  const result = { morning: "", noon: "", evening: "" };
-  const segments = String(block)
-    .split(/[\n；;。，,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  for (const segment of segments) {
-    if (/(早餐|上午|7点|10点|^10[-:：])/.test(segment)) {
-      result.morning = generalizeMeal(segment);
-      continue;
-    }
-    if (/(中午|午餐|下午|12点|15点|^15[-:：])/.test(segment)) {
-      result.noon = generalizeMeal(segment);
-      continue;
-    }
-    if (/(晚上|晚餐|18点|20点|^18[-:：])/.test(segment)) {
-      result.evening = generalizeMeal(segment);
-    }
-  }
-
-  return result;
-}
-
-function generalizeMeal(segment) {
-  const text = String(segment || "")
-    .replace(/^\d{1,2}(?:[:：]\d{0,2})?(?:\s*-\s*\d{1,2}(?:[:：]\d{0,2})?)?/, "")
-    .replace(/^(早餐|午餐|晚餐|上午|中午|晚上|下午)[:：]?/, "")
-    .replace(/^第\d+天[:：]?/, "")
-    .replace(/^吃几口/, "")
-    .trim();
-
-  if (!text) return "";
-
-  const combinedExample = text.match(/粥\/面（例：([^/]+)\/([^)）]+)）/);
-  if (combinedExample) {
-    return `粥（例：${combinedExample[1].trim()}） / 面（例：${combinedExample[2].trim()}）`;
-  }
-
-  const preformatted = [...text.matchAll(/(面（例：[^）]+）|粥（例：[^）]+）|土豆泥\/蔬菜泥|啃咬|小米油|五果粉|芝麻糊|玉米汁)/g)]
-    .map((match) => match[1]);
-  if (preformatted.length) {
-    return dedupe(preformatted).join(" / ");
-  }
-
-  if (/粥或面/.test(text)) return "粥/面";
-
-  const parts = [];
-  if (/(粥|米糊)/.test(text)) parts.push(extractCategoryExample(text, "粥"));
-  if (/面/.test(text)) parts.push(extractCategoryExample(text, "面"));
-  if (/(土豆泥|南瓜泥|泥)/.test(text)) parts.push("土豆泥/蔬菜泥");
-  if (/小米油/.test(text)) parts.push("小米油");
-  if (/五果粉/.test(text)) parts.push("五果粉");
-  if (/芝麻糊/.test(text)) parts.push("芝麻糊");
-  if (/玉米汁/.test(text)) parts.push("玉米汁");
-  if (/啃咬/.test(text)) parts.push("啃咬");
-
-  return dedupe(parts).join(" / ");
-}
-
-function extractCategoryExample(text, category) {
-  const examples = String(text)
-    .split(/[+、，,\s/]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .filter((item) => item.includes(category))
-    .slice(0, 2);
-
-  if (!examples.length) return category;
-  return `${category}（例：${examples.join("/")}）`;
 }
 
 function normalizeRoutineLine(line) {
