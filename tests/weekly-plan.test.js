@@ -57,8 +57,8 @@ test("extractBabyCard parses top card fields from profile text", () => {
 目前月龄1月9天
 目前体重9斤
 目前身高56cm
-大便：一天1-2次，有黏液、稀便
-皮肤情况：四肢及身体湿疹；反复结痂
+大便：一天1-2次，有黏液、稀便（大便、皮肤皮疹拍照发给助教老师）
+皮肤情况：四肢及身体湿疹；反复结痂（大便、皮肤皮疹拍照发给助教老师）
 喂养史：母乳
 辅食添加：未添加
 `;
@@ -71,7 +71,31 @@ test("extractBabyCard parses top card fields from profile text", () => {
   assert.equal(card.birthWeight, "3.3kg");
   assert.equal(card.birthHeight, "51cm");
   assert.equal(card.stool, "一天1-2次，有黏液、稀便");
-  assert.equal(card.skin, "四肢及身体湿疹；反复结痂");
+  assert.equal(card.skin, "四肢及身体湿疹，反复结痂");
+});
+
+test("extractBabyCard summarizes stool and skin text without photo reminder", () => {
+  const profile = `
+宝宝信息：
+出生年月日：2025年5月1日
+昵称：洋洋
+出生体重3.1kg
+出生身高50cm
+目前月龄1岁1个月
+大便：成型软便（26.6.6开始换的部分水解蛋白奶粉，换奶粉的这几天大便形态比较稳定，换奶之前，大便有时候偏干，有时候偏稀，有时候是带裂纹香肠状的，前干后软，有时又是不成型稀便）（三天以上的大便情况）
+皮肤情况：下眼睑有时候微微泛红，有时候感觉还好，肛周容易起红色疹子，近几个月时间老是容易反复，每天都有用护臀膏，肛周皮肤近几个月时间老是容易泛红（好像从第一次吃头孢，拉肚子屁股长疹子后，后面就反复了好几次了）。（大便、皮肤皮疹拍照发给助教老师）
+喂养史：配方奶
+`;
+
+  const card = extractBabyCard(profile);
+
+  assert.match(card.stool, /成型软便/);
+  assert.match(card.stool, /偏干|偏稀|不成型/);
+  assert.ok(!/拍照|助教老师/.test(card.stool));
+  assert.match(card.skin, /下眼睑/);
+  assert.match(card.skin, /肛周/);
+  assert.match(card.skin, /泛红|红色疹子|反复/);
+  assert.ok(!/拍照|助教老师/.test(card.skin));
 });
 
 test("layout helpers keep note guidance, dedupe outdoor tasks, and summarize food text", () => {
@@ -99,6 +123,10 @@ test("layout helpers keep note guidance, dedupe outdoor tasks, and summarize foo
 
   const checklist = buildDynamicChecklistSections(week, input, babyCard);
   const routineLines = buildRoutineLines("", "17:30 黄昏觉（约30分钟）\n18:00-18:30 小米油/五果粉 + 啃咬");
+  const detailedRoutineLines = buildRoutineLines(
+    "",
+    "7-7点半喝奶150ml+包子或馒头或面饼。（早上不吃鸡蛋）\n8点-11点户外活动、市场买菜、玩耍，10-10点半左右给两天小米油，一天玉米汁交替着喝60-80g+啃咬。\n约8点左右喂奶150-210ml左右，这餐奶不定量，比如今晚给的是150ml能5分钟左右很快就喝完了，那么下一晚的时候就要增加10ml给。"
+  );
   const focusText = buildFocusPointText(input.stageSummary, week.focus_points);
   const foodReference = buildFoodReference(input.feedingPlan, 1);
   const exerciseRows = checklist.taskSections.find((section) => section.category === "运动").rows.map((row) => row.text);
@@ -109,6 +137,10 @@ test("layout helpers keep note guidance, dedupe outdoor tasks, and summarize foo
   assert.ok(!exerciseRows.includes("户外活动"));
   assert.ok(exerciseRows.includes("抚触按摩"));
   assert.match(routineLines, /17:30 黄昏觉/);
+  assert.match(detailedRoutineLines, /07:00-07:30 喝奶150ml\+包子或馒头或面饼/);
+  assert.match(detailedRoutineLines, /08:00-11:00 户外活动、市场买菜、玩耍/);
+  assert.match(detailedRoutineLines, /20:00 喂奶150-210ml左右/);
+  assert.ok(!/比如今晚/.test(detailedRoutineLines));
   assert.match(focusText, /关注肠道调理和大便变化/);
   assert.equal(foodReference.rows[0][0], "粥（例：小米粥） / 面（例：猪肉青菜面）");
   assert.equal(foodReference.rows[1][0], "面（例：碎肉青菜面条） / 粥（例：红薯红枣粥） / 土豆泥/蔬菜泥 / 面（例：西兰花碎肉面）");

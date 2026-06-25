@@ -64,7 +64,7 @@ export class JobService {
       const uploaded = await this.feishuClient.uploadFile(localFilePath);
       const imported = await this.feishuClient.importExcelAsSheet(
         uploaded.file_token || uploaded.file_token_list?.[0] || uploaded.token,
-        `${fileBaseName}.xlsx`
+        fileBaseName
       );
 
       await this.feishuClient.updateWeeklyRecord(recordId, {

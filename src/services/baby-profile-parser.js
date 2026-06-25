@@ -7,8 +7,8 @@ export function extractBabyCard(profileText = "") {
   const feedingType = deriveFeedingType(text);
   const birthWeight = cleanValue(captureField(babySection, "出生体重", ["出生身高", "目前月龄"]));
   const birthHeight = cleanValue(captureField(babySection, "出生身高", ["目前月龄", "目前体重"]));
-  const stool = cleanSummary(captureField(babySection, "大便：", ["皮肤情况：", "出生后是否住院："]));
-  const skin = cleanSummary(captureField(babySection, "皮肤情况：", ["出生后是否住院：", "喂养史："]));
+  const stool = summarizeDescriptiveField(captureField(babySection, "大便：", ["皮肤情况：", "出生后是否住院："]), "stool");
+  const skin = summarizeDescriptiveField(captureField(babySection, "皮肤情况：", ["出生后是否住院：", "喂养史："]), "skin");
 
   return {
     birthDate,
@@ -37,7 +37,7 @@ function normalizeDateText(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
-  const match = raw.match(/(\d{4})[.\/年-](\d{1,2})[.\/月-](\d{1,2})/);
+  const match = raw.match(/(\d{4})[.\/年](\d{1,2})[.\/月](\d{1,2})/);
   if (!match) return raw;
 
   return `${match[1]}/${match[2].padStart(2, "0")}/${match[3].padStart(2, "0")}`;
@@ -59,15 +59,62 @@ function normalizeAgeText(value) {
 function cleanValue(value) {
   return String(value || "")
     .replace(/\s+/g, "")
-    .replace(/[。；，,]*$/, "")
+    .replace(/[。；，、]*$/, "")
     .trim();
 }
 
-function cleanSummary(value) {
-  return String(value || "")
+function summarizeDescriptiveField(value, type) {
+  const raw = String(value || "")
     .replace(/\s+/g, " ")
-    .replace(/[。]*$/, "")
+    .replace(/（?大便、皮肤皮疹拍照发给助教老师）?/g, "")
+    .replace(/拍照发给助教老师/g, "")
+    .replace(/[。；，、]*$/, "")
     .trim();
+
+  if (!raw) return "";
+
+  const clauses = raw
+    .split(/[。；]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .flatMap((item) => item.split(/(?=一天\d+次左右|一天\d+-\d+次|每日\d+次|大便|脸上|身上|四肢|肛周|下眼睑)/))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => !/助教老师|拍照/.test(item));
+
+  const normalized = dedupe(
+    clauses.map((item) => item.replace(/^大便[:：]?\s*/g, "").replace(/^皮肤情况[:：]?\s*/g, "").trim())
+  );
+
+  if (type === "stool") {
+    return normalized
+      .sort((a, b) => scoreStoolClause(a) - scoreStoolClause(b))
+      .join("，")
+      .replace(/，+/g, "，")
+      .trim();
+  }
+
+  return normalized
+    .sort((a, b) => scoreSkinClause(a) - scoreSkinClause(b))
+    .join("，")
+    .replace(/，+/g, "，")
+    .trim();
+}
+
+function scoreStoolClause(text) {
+  if (/一天|每日|\d+次/.test(text)) return 0;
+  if (/粘液|黏液|稀便|偏稀|偏干|裂纹|前干后软|不成型|软便|成型/.test(text)) return 1;
+  return 2;
+}
+
+function scoreSkinClause(text) {
+  if (/下眼睑|脸上|身上|四肢|肛周/.test(text)) return 0;
+  if (/泛红|红疹|湿疹|结痂|反复/.test(text)) return 1;
+  return 2;
+}
+
+function dedupe(values) {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function matchFirst(text, patterns) {

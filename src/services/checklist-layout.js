@@ -294,18 +294,168 @@ function extractCategoryExample(text, category) {
 }
 
 function normalizeRoutineLine(line) {
-  const clean = String(line || "").replace(/\s+/g, " ").trim();
+  const clean = normalizeRoutineSource(String(line || "").replace(/\s+/g, " ").trim());
   if (!clean) return "";
 
-  const match = clean.match(
-    /^(夜间[^，。；]*|凌晨[^，。；]*|约?\d{1,2}[:：]?\d{0,2}(?:\s*[-~]\s*\d{1,2}[:：]?\d{0,2})?)(.*)$/
+  const directHalfHourRangeMatch = clean.match(
+    /^(约|大约)?\s*(早上|上午|中午|下午|晚上|夜间|夜里|凌晨)?\s*(\d{1,2})点?\s*-\s*(\d{1,2})点半(.*)$/i
   );
+  if (directHalfHourRangeMatch) {
+    const startHour = inferRoutineHour(
+      adjustHourByPeriod(Number(directHalfHourRangeMatch[3]), directHalfHourRangeMatch[2]),
+      directHalfHourRangeMatch[5] || "",
+      directHalfHourRangeMatch[2]
+    );
+    const endHour = inferRoutineHour(
+      adjustHourByPeriod(Number(directHalfHourRangeMatch[4]), directHalfHourRangeMatch[2], startHour),
+      directHalfHourRangeMatch[5] || "",
+      directHalfHourRangeMatch[2]
+    );
+    const action = summarizeRoutineAction(directHalfHourRangeMatch[5] || "");
+    return action
+      ? `${formatTime(startHour, 0)}-${formatTime(endHour, 30)} ${action}`
+      : `${formatTime(startHour, 0)}-${formatTime(endHour, 30)}`;
+  }
 
-  if (!match) return clean.replace(/[›>]+/g, "").trim();
+  const parsed = extractRoutineTime(clean);
+  if (!parsed) {
+    return summarizeRoutineAction(clean.replace(/[›>]+/g, "").trim());
+  }
 
-  const time = match[1].replace(/：/g, ":").replace(/\s*[-~]\s*/g, "-").trim();
-  const action = match[2].replace(/^[，。；、:：\-\s]+/, "").replace(/[›>]+/g, "").trim();
-  return action ? `${time} ${action}` : time;
+  const action = summarizeRoutineAction(parsed.action);
+  return action ? `${parsed.time} ${action}` : parsed.time;
+}
+
+function normalizeRoutineSource(line) {
+  return String(line || "")
+    .replace(/(\d{1,2})-(\d{1,2})点半/g, "$1点-$2点半")
+    .replace(/(\d{1,2})-(\d{1,2})点(?!半)/g, "$1点-$2点")
+    .replace(/(\d{1,2})点半左右/g, "$1点半")
+    .replace(/(\d{1,2})点左右/g, "$1点");
+}
+
+function extractRoutineTime(line) {
+  const source = String(line || "")
+    .replace(/[›>]+/g, "")
+    .replace(/^(\d{1,2})\s*-\s*(\d{1,2})\s*点半/, "$1点-$2点半")
+    .replace(/^(\d{1,2})\s*-\s*(\d{1,2})\s*点(?!半)/, "$1点-$2点")
+    .trim();
+  const halfHourRangeMatch = source.match(
+    /^(约|大约)?\s*(早上|上午|中午|下午|晚上|夜间|夜里|凌晨)?\s*(\d{1,2})点\s*[-~到至]\s*(\d{1,2})点半\s*(左右)?(.*)$/i
+  );
+  if (halfHourRangeMatch) {
+    const startHour = inferRoutineHour(
+      adjustHourByPeriod(Number(halfHourRangeMatch[3]), halfHourRangeMatch[2]),
+      halfHourRangeMatch[6] || "",
+      halfHourRangeMatch[2]
+    );
+    const endHour = inferRoutineHour(
+      adjustHourByPeriod(Number(halfHourRangeMatch[4]), halfHourRangeMatch[2], startHour),
+      halfHourRangeMatch[6] || "",
+      halfHourRangeMatch[2]
+    );
+    return {
+      time: `${formatTime(startHour, 0)}-${formatTime(endHour, 30)}`,
+      action: halfHourRangeMatch[6] || ""
+    };
+  }
+
+  const rangeMatch = source.match(
+    /^(约|大约)?\s*(早上|上午|中午|下午|晚上|夜间|夜里|凌晨)?\s*(\d{1,2})(?::|：)?(\d{0,2})?\s*(点半|点)?\s*[-~到至]\s*(\d{1,2})(?::|：)?(\d{0,2})?\s*(点半|点)?\s*(左右)?(.*)$/i
+  );
+  if (rangeMatch) {
+    const startHour = inferRoutineHour(
+      adjustHourByPeriod(Number(rangeMatch[3]), rangeMatch[2]),
+      rangeMatch[10] || "",
+      rangeMatch[2]
+    );
+    const startMinute = resolveMinute(rangeMatch[4], rangeMatch[5]);
+    const endHour = inferRoutineHour(
+      adjustHourByPeriod(Number(rangeMatch[6]), rangeMatch[2], startHour),
+      rangeMatch[10] || "",
+      rangeMatch[2]
+    );
+    const endMinute = resolveMinute(rangeMatch[7], rangeMatch[8]);
+    return {
+      time: `${formatTime(startHour, startMinute)}-${formatTime(endHour, endMinute)}`,
+      action: rangeMatch[10] || ""
+    };
+  }
+
+  const singleMatch = source.match(
+    /^(约|大约)?\s*(早上|上午|中午|下午|晚上|夜间|夜里|凌晨)?\s*(\d{1,2})(?::|：)?(\d{0,2})?\s*(点半|点)?\s*(左右)?(.*)$/i
+  );
+  if (!singleMatch) return null;
+
+  return {
+    time: formatTime(
+      inferRoutineHour(
+        adjustHourByPeriod(Number(singleMatch[3]), singleMatch[2]),
+        singleMatch[7] || "",
+        singleMatch[2]
+      ),
+      resolveMinute(singleMatch[4], singleMatch[5])
+    ),
+    action: singleMatch[7] || ""
+  };
+}
+
+function summarizeRoutineAction(action) {
+  const clean = String(action || "")
+    .replace(/^[，。；、:：\-\s]+/, "")
+    .replace(/[。；]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!clean) return "";
+
+  const sentence = clean.split(/[。；]/)[0].trim();
+  const clauses = sentence.split(/，/).map((item) => item.trim()).filter(Boolean);
+  if (clauses.length === 0) return sentence;
+
+  const selected = [clauses[0]];
+  if (clauses[1] && /^(饭后午觉|午觉约|饭后睡|哄睡|拍拍睡|夜里其他时间醒来拍拍睡为主)/.test(clauses[1])) {
+    selected.push(clauses[1].replace(/（如果宝宝要喝奶，可以喂点）/g, ""));
+  }
+
+  return selected
+    .join("，")
+    .replace(/（如果宝宝要喝奶，可以喂点）/g, "")
+    .replace(/，?(比如|那么|一直加到|一直到|发现宝宝|这餐奶不定量|不吃太饱|锻炼口腔|刺激长牙).*/g, "")
+    .replace(/喝完奶后可以在床上和宝宝聊天、读绘本、按摩等/g, "")
+    .replace(/左右左右/g, "左右")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+function resolveMinute(rawMinute, rawSuffix) {
+  if (rawMinute != null && rawMinute !== "") return Number(rawMinute);
+  if (rawSuffix === "点半") return 30;
+  return 0;
+}
+
+function adjustHourByPeriod(hour, period, _referenceHour = hour) {
+  if (!period) return hour;
+  if (period === "凌晨") return hour;
+  if ((period === "下午" || period === "晚上" || period === "夜间" || period === "夜里") && hour < 12) return hour + 12;
+  if (period === "中午" && hour < 11) return hour + 12;
+  return hour;
+}
+
+function inferRoutineHour(hour, action, period) {
+  if (period) return hour;
+  if (hour > 8) return hour;
+
+  const text = String(action || "");
+  if (/(哄睡|读绘本|床上|这餐奶|潮汐|夜里|拍拍睡)/.test(text)) {
+    return hour + 12;
+  }
+
+  return hour;
+}
+
+function formatTime(hour, minute) {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function splitStageSummary(text) {
