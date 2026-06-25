@@ -1,0 +1,21 @@
+{
+  "name": "yuerji-feishu-week-excel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/app.js",
+    "start": "node src/app.js",
+    "test": "node --test",
+    "demo:mock": "node scripts/render-local-demo.js",
+    "demo:ai": "node scripts/generate-local-with-ai.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "openai": "^4.104.0",
+    "zod": "^3.25.76"
+  }
+}
