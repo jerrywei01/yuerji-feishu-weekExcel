@@ -198,7 +198,7 @@ export class FeishuClient {
     const encodedToken = encodeURIComponent(fileToken);
     return this.request(
       "DELETE",
-      `https://open.feishu.cn/open-apis/drive/v1/files/${encodedToken}`
+      `https://open.feishu.cn/open-apis/drive/v1/files/${encodedToken}?type=file`
     );
   }
 

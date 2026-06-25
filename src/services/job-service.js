@@ -72,8 +72,8 @@ export class JobService {
         fileBaseName,
         targetFolderToken
       );
-      await this.feishuClient.deleteFile(uploaded.file_token || uploaded.file_token_list?.[0] || uploaded.token);
       await this.transferGeneratedSheetOwner(imported);
+      await this.cleanupUploadedFile(uploaded);
 
       await this.feishuClient.updateWeeklyRecord(recordId, {
         [FEISHU_FIELDS.status]: FEISHU_STATUS.done,
@@ -123,5 +123,19 @@ export class JobService {
     }
 
     await this.feishuClient.transferSheetOwner(sheetToken, userId);
+  }
+
+  async cleanupUploadedFile(uploaded) {
+    const uploadedFileToken = uploaded?.file_token || uploaded?.file_token_list?.[0] || uploaded?.token;
+    if (!uploadedFileToken) return;
+
+    try {
+      await this.feishuClient.deleteFile(uploadedFileToken);
+    } catch (error) {
+      logger.error("Uploaded xlsx cleanup failed", {
+        fileToken: uploadedFileToken,
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   }
 }
