@@ -237,6 +237,78 @@ test("SheetRenderer preserves colored merged sections, photo upload rows, guided
   );
 });
 
+test("SheetRenderer tolerates pre-merged template cells without throwing merge conflicts", async () => {
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "yuerji-merge-"));
+  const templatePath = path.join(workDir, "template.xlsx");
+
+  const templateBook = new ExcelJS.Workbook();
+  await templateBook.xlsx.readFile(path.resolve(".tmp", "template.xlsx"));
+  const templateSheet = templateBook.worksheets[0];
+  templateSheet.unMergeCells("A9:A12");
+  templateSheet.unMergeCells("B9:B11");
+  templateSheet.unMergeCells("A26:J26");
+  templateSheet.mergeCells("A9:C9");
+  templateSheet.mergeCells("A26:J26");
+  await templateBook.xlsx.writeFile(templatePath);
+
+  const renderer = new SheetRenderer({
+    templatePath,
+    outputDir: workDir
+  });
+
+  const renderPromise = renderer.render(
+    {
+      recordId: "rec_2",
+      planTitle: "merge-test",
+      motherName: "测试妈妈",
+      babyName: "测试宝宝",
+      babyProfile: `
+宝宝信息：出生年月日：2025年5月1日
+出生体重3.3kg
+出生身高51cm
+目前月龄1岁1个月
+大便：一天1-2次
+皮肤情况：正常
+喂养史：母乳
+`,
+      stageSummary: "添加益生菌4周，足量户外运动+按摩。",
+      routinePlan: "7-7点半喝奶150ml+包子。8点-11点户外活动。12点午饭+午觉。15点起床奶。18点晚饭。20点喂奶。",
+      feedingPlan: "吃短期食物，加油盐，多吃薯类、洋葱、莲藕等，加餐给吃小米油、五果粉、玉米汁、芝麻糊等。",
+      bathPlan: "第一周：泡两天的健包+一天退包",
+      recordDate: "2026-07-09",
+      planStartDate: "2026-07-09",
+      weekCount: 1
+    },
+    {
+      baby: {
+        name: "测试宝宝",
+        birth_info_text: "2025/05/01",
+        age_text: "1Y1M",
+        feeding_type: "母乳",
+        body_text: ""
+      },
+      weeks: [
+        {
+          week_no: 1,
+          title: "第1周",
+          start_date: "2026-07-09",
+          end_date: "2026-07-15",
+          routine_summary: "作息摘要",
+          focus_points: ["重点1"],
+          card_items: {
+            feeding: ["10:00 小米油", "12:00 午饭", "18:00 晚饭", "加餐", "啃咬"],
+            exercise: ["户外活动", "抚触按摩"],
+            sleep: ["午觉"],
+            care: ["泡瑶浴", "益生菌"]
+          }
+        }
+      ]
+    }
+  );
+
+  await assert.doesNotReject(renderPromise);
+});
+
 function findRow(sheet, predicate) {
   for (let rowNumber = 1; rowNumber <= sheet.rowCount; rowNumber += 1) {
     const row = sheet.getRow(rowNumber);

@@ -120,9 +120,9 @@ export class SheetRenderer {
 
   clearBodyArea(sheet) {
     const bottomRow = sheet.rowCount;
+    const merges = Object.values(sheet._merges || {}).map((merge) => ({ ...merge.model }));
 
-    for (const merge of Object.values(sheet._merges || {})) {
-      const model = merge.model;
+    for (const model of merges) {
       if (model.top >= TASK_START_ROW && model.bottom <= bottomRow) {
         sheet.unMergeCells(toRange(model));
       }
@@ -268,7 +268,7 @@ export class SheetRenderer {
     });
 
     for (const merge of Object.values(source._merges || {})) {
-      target.mergeCells(toRange(merge.model));
+      safeMerge(target, toRange(merge.model));
     }
   }
 
@@ -371,13 +371,19 @@ function columnLetter(index) {
 }
 
 function safeMerge(sheet, range) {
+  const target = parseRange(range);
+  const existingMerges = Object.values(sheet._merges || {}).map((merge) => ({ ...merge.model }));
+
+  if (existingMerges.some((model) => rangesEqual(model, target))) {
+    return;
+  }
+
   try {
     sheet.mergeCells(range);
   } catch {
-    const target = parseRange(range);
-    for (const merge of Object.values(sheet._merges || {})) {
-      if (rangesIntersect(merge.model, target)) {
-        sheet.unMergeCells(toRange(merge.model));
+    for (const model of existingMerges) {
+      if (rangesIntersect(model, target)) {
+        sheet.unMergeCells(toRange(model));
       }
     }
     sheet.mergeCells(range);
@@ -402,4 +408,8 @@ function columnIndex(value) {
 
 function rangesIntersect(a, b) {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+function rangesEqual(a, b) {
+  return a.left === b.left && a.right === b.right && a.top === b.top && a.bottom === b.bottom;
 }
