@@ -13,9 +13,13 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-const isEntrypoint = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+export function shouldStartHttpServer(argv = process.argv, envVars = process.env) {
+  const isEntrypoint = argv[1] && pathToFileURL(argv[1]).href === import.meta.url;
+  const isPm2Process = envVars.pm_id != null;
+  return envVars.NODE_ENV !== "test" && (isEntrypoint || isPm2Process);
+}
 
-if (process.env.NODE_ENV !== "test" && isEntrypoint) {
+if (shouldStartHttpServer()) {
   app.listen(env.port, () => {
     console.log(`Server running at http://localhost:${env.port}`);
   });
