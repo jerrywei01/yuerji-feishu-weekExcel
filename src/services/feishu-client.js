@@ -34,11 +34,15 @@ const BABY_FIELDS = {
 export class FeishuClient {
   constructor(options = {}) {
     this.fetchImpl = options.fetchImpl || fetch;
+    this.nowImpl = options.nowImpl || Date.now;
     this.tenantToken = null;
+    this.tenantTokenExpiresAt = 0;
   }
 
   async getTenantAccessToken() {
-    if (this.tenantToken) return this.tenantToken;
+    if (this.tenantToken && this.nowImpl() < this.tenantTokenExpiresAt) {
+      return this.tenantToken;
+    }
 
     const config = requireFeishuEnv();
     const response = await this.fetchImpl("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", {
@@ -58,6 +62,9 @@ export class FeishuClient {
     }
 
     this.tenantToken = data.tenant_access_token;
+    const expiresInSeconds = Number(data.expire) || 0;
+    const refreshInSeconds = Math.max(expiresInSeconds - 60, 0);
+    this.tenantTokenExpiresAt = this.nowImpl() + refreshInSeconds * 1000;
     return this.tenantToken;
   }
 
